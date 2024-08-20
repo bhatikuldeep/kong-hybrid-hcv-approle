@@ -31,10 +31,9 @@ networks:
   kong-net:
     name: kong-net
     driver: bridge
-  kong-net-internal:
-    name: kong-net-internal
-    driver: bridge
-    internal: true
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
 
 services:
   kong-migrations:
@@ -74,7 +73,6 @@ services:
     cpus: 4
     networks:
       - kong-net
-      - kong-net-internal
     volumes:
       - ./certs:/data/certs
     user: "${KONG_USER:-kong}"
@@ -93,6 +91,17 @@ services:
       KONG_CLUSTER_MTLS: "shared"
       KONG_CLUSTER_CERT: "/data/certs/cluster-cert.pem"
       KONG_CLUSTER_CERT_KEY: "/data/certs/cluster-key.pem"
+
+      #Hashicorp Vault Approle configs
+      KONG_VAULT_HCV_PROTOCOL: "http"
+      KONG_VAULT_HCV_HOST: "172.18.0.2"
+      KONG_VAULT_HCV_PORT: "8200"
+      KONG_VAULT_HCV_MOUNT: "secret"
+      KONG_VAULT_HCV_KV: "v1"
+      KONG_VAULT_HCV_AUTH_METHOD: "approle"
+      KONG_VAULT_HCV_APPROLE_ROLE_ID: "01d7e428-8d80-1b0f-85e4-f3a1eb77b699"
+      KONG_VAULT_HCV_APPROLE_SECRET_ID: "777893fe-f55a-b18f-764d-21803cbe2377"
+      KONG_LOG_LEVEL: "debug"
 
   db:
     networks:
@@ -119,9 +128,9 @@ services:
     cpus: 4
     networks:
       - kong-net
-      - kong-net-internal
     volumes:
       - ./certs:/data/certs
+      - ./secrets:/data/secrets
     user: "${KONG_USER:-kong}"
     ports:
       - 8000:8000
@@ -141,10 +150,22 @@ services:
       KONG_CLUSTER_TELEMETRY_ENDPOINT: "kong-gateway-cp:8006"
       KONG_DATABASE: "off"
 
+      #Hashicorp Vault Approle configs
+      KONG_VAULT_HCV_PROTOCOL: "http"
+      KONG_VAULT_HCV_HOST: "172.18.0.2"
+      KONG_VAULT_HCV_PORT: "8200"
+      KONG_VAULT_HCV_MOUNT: "secret"
+      KONG_VAULT_HCV_KV: "v1"
+      KONG_VAULT_HCV_AUTH_METHOD: "approle"
+      KONG_VAULT_HCV_APPROLE_ROLE_ID: "01d7e428-8d80-1b0f-85e4-f3a1eb77b699"
+      #KONG_VAULT_HCV_APPROLE_SECRET_ID: "777893fe-f55a-b18f-764d-21803cbe2377"
+      KONG_VAULT_HCV_APPROLE_SECRET_ID_FILE: "/data/secrets/secret_file"
+      KONG_VAULT_HCV_APPROLE_RESPONSE_WRAPPING: "true"
+      KONG_LOG_LEVEL: "debug"
+
   httpbin:
     networks:
       - kong-net
-      - kong-net-internal
     image: kennethreitz/httpbin
     platform: linux/x86_64
     ports:
@@ -172,3 +193,18 @@ services:
       echo '*       SETUP IS COMPLETE - READY TO KONG!        *' ;
       echo '*                                                 *' ;
       echo '***************************************************'"
+  
+  vault:
+    image: hashicorp/vault:latest
+    networks:
+      kong-net:
+        ipv4_address: 172.18.0.2
+    container_name: vault
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./hcv:/vault/config
+      - ./data:/vault/file
+    cap_add:
+      - IPC_LOCK
+    command: "vault server -config=/vault/config/vault-config.json"
