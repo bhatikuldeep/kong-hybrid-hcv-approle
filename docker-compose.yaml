@@ -90,18 +90,7 @@ services:
       KONG_ROLE: "control_plane"
       KONG_CLUSTER_MTLS: "shared"
       KONG_CLUSTER_CERT: "/data/certs/cluster-cert.pem"
-      KONG_CLUSTER_CERT_KEY: "/data/certs/cluster-key.pem"
-
-      #Hashicorp Vault Approle configs
-      KONG_VAULT_HCV_PROTOCOL: "http"
-      KONG_VAULT_HCV_HOST: "172.18.0.2"
-      KONG_VAULT_HCV_PORT: "8200"
-      KONG_VAULT_HCV_MOUNT: "secret"
-      KONG_VAULT_HCV_KV: "v1"
-      KONG_VAULT_HCV_AUTH_METHOD: "approle"
-      KONG_VAULT_HCV_APPROLE_ROLE_ID: "01d7e428-8d80-1b0f-85e4-f3a1eb77b699"
-      KONG_VAULT_HCV_APPROLE_SECRET_ID: "777893fe-f55a-b18f-764d-21803cbe2377"
-      KONG_LOG_LEVEL: "debug"
+      KONG_CLUSTER_CERT_KEY: "/data/certs/cluster-key.pem"      
 
   db:
     networks:
@@ -113,8 +102,8 @@ services:
       POSTGRES_USER: kong
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "kong"]
-      interval: 30s
-      timeout: 30s
+      interval: 10s
+      timeout: 10s
       retries: 3
     restart: on-failure
     stdin_open: true
@@ -130,7 +119,8 @@ services:
       - kong-net
     volumes:
       - ./certs:/data/certs
-      - ./secrets:/data/secrets
+      - ./secrets:/usr/local/kong/secrets
+      - ./approle.lua:/usr/local/share/lua/5.1/kong/vaults/hcv/approle.lua
     user: "${KONG_USER:-kong}"
     ports:
       - 8000:8000
@@ -152,16 +142,13 @@ services:
 
       #Hashicorp Vault Approle configs
       KONG_VAULT_HCV_PROTOCOL: "http"
-      KONG_VAULT_HCV_HOST: "172.18.0.2"
+      KONG_VAULT_HCV_HOST: "172.18.0.10"
       KONG_VAULT_HCV_PORT: "8200"
       KONG_VAULT_HCV_MOUNT: "secret"
       KONG_VAULT_HCV_KV: "v1"
       KONG_VAULT_HCV_AUTH_METHOD: "approle"
       KONG_VAULT_HCV_APPROLE_ROLE_ID: "01d7e428-8d80-1b0f-85e4-f3a1eb77b699"
-      #KONG_VAULT_HCV_APPROLE_SECRET_ID: "777893fe-f55a-b18f-764d-21803cbe2377"
-      KONG_VAULT_HCV_APPROLE_SECRET_ID_FILE: "/data/secrets/secret_file"
-      KONG_VAULT_HCV_APPROLE_RESPONSE_WRAPPING: "true"
-      KONG_LOG_LEVEL: "debug"
+      KONG_VAULT_HCV_APPROLE_SECRET_ID_FILE: "/usr/local/kong/secrets/secret_file"
 
   httpbin:
     networks:
@@ -176,7 +163,7 @@ services:
   deck:
     networks:
       - kong-net
-    image: kong/deck:v1.34.0
+    image: kong/deck:v1.39.4
     volumes:
       - ./decks:/tmp/decks:ro
     environment:
@@ -198,7 +185,7 @@ services:
     image: hashicorp/vault:latest
     networks:
       kong-net:
-        ipv4_address: 172.18.0.2
+        ipv4_address: 172.18.0.10
     container_name: vault
     ports:
       - "8200:8200"
@@ -208,3 +195,18 @@ services:
     cap_add:
       - IPC_LOCK
     command: "vault server -config=/vault/config/vault-config.json"
+
+  redis:
+    container_name: redis-stack
+    networks:
+      - kong-net
+    image: 'redis/redis-stack:latest'
+    restart: unless-stopped
+    environment:
+      REDIS_ARGS: "--requirepass root --aclfile /etc/redis/users.acl"
+    volumes:
+      - ./redis-data:/data
+      - ./redis/redis-users.acl:/etc/redis/users.acl:z # Adding ACL file for user
+    ports:
+      - "6379:6379" # Redis server
+      - "8008:8001" # RedisInsight, changed to avoid conflict

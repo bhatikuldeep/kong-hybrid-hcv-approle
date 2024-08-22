@@ -1,0 +1,2 @@
+user default on >root ~* &* +@all
+user appuser on >s3cr3t ~* &* +@all
