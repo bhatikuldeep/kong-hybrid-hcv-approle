@@ -69,6 +69,7 @@ In this setup, RedisInsight UI is exposed on port 8008. You can access it in you
 ### Steps to login to RedisInsight UI
 
 - Open the RedisInsight UI at - http://localhost:8008
+- First time, accept terms and conditions and hit submit button.
 - Enter `root` in the password input box, rest keep as is.
 - To unseal, use the set of keys created here - `vault-cluster-vault.json` under `keys` proerty. 
 - Once unseal, enter the token from the same file - `vault-cluster-vault.json` and use the value from `token` property. 
@@ -93,8 +94,62 @@ This docker compose runs  local httpbin container, check the `decks/kong.yaml` f
 To test the Kong gateway service, run the following command:
 `curl -X GET http://localhost:8000/anything` or `http :8000/anything`
 
+You should see the RLA headers for e.g.
+
+```curl
+$ http :8000/anything
+
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: *
+Connection: keep-alive
+Content-Length: 518
+Content-Type: application/json
+Date: Thu, 22 Aug 2024 13:52:05 GMT
+RateLimit-Limit: 10
+RateLimit-Remaining: 8
+RateLimit-Reset: 55
+Server: gunicorn/19.9.0
+Via: kong/3.4.3.12-enterprise-edition
+X-Kong-Proxy-Latency: 1
+X-Kong-Request-Id: f3169c6d9836515f3165057e6ed86622
+X-Kong-Upstream-Latency: 6
+X-RateLimit-Limit-Minute: 10
+X-RateLimit-Limit-Month: 200
+X-RateLimit-Remaining-Minute: 8
+X-RateLimit-Remaining-Month: 182
+
+{
+    "args": {},
+    "data": "",
+    "files": {},
+    "form": {},
+    "headers": {
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+        "Host": "httpbin",
+        "User-Agent": "HTTPie/3.2.2",
+        "X-Forwarded-Host": "localhost",
+        "X-Forwarded-Path": "/anything",
+        "X-Forwarded-Prefix": "/anything",
+        "X-Kong-Request-Id": "f3169c6d9836515f3165057e6ed86622"
+    },
+    "json": null,
+    "method": "GET",
+    "origin": "172.18.0.1",
+    "url": "http://localhost/anything"
+}
+```
+
 Make sure to test and validate various RLA counters and check the same in RedisInsight UI matching RLA key.
 
 
 ## Conclusion
 By following this guide, you will have a Kong Gateway setup running in hybrid mode with a PostgreSQL database, secured with cluster certificates, and configured using a declarative kong.yaml file. You can easily start and stop the services using the provided Makefile commands.
+
+## References
+- https://developer.hashicorp.com/vault/docs/auth/approle 
+- https://hub.docker.com/r/redis/redisinsight
+- https://medium.com/redis-with-raphael-de-lio/how-to-run-redis-locally-in-a-docker-container-and-manage-it-with-redis-insight-and-redis-cli-14b0af54e1d2 
+- https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/
