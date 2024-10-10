@@ -16,7 +16,7 @@ services:
       hour: null
       limit_by: consumer
       minute: 10
-      month: 200
+      month: null
       path: null
       policy: redis
       redis_database: 0
